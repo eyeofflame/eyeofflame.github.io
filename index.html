@@ -1,12 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>更新日志</title>
+    <meta charset="utf-8">
+    <title>更新日志</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        function loadMarkdownFile() {
+            fetch('readme.md')
+                .then(response => response.text())
+                .then(markdown => {
+                    const html = marked(markdown);
+                    document.getElementById('markdown-content').innerHTML = html;
+                });
+        }
+    </script>
 </head>
-<body>
-    <h1>我的第一个标题</h1>
-    <p>我的第一个段落。</p>
-    <iframe src="example.md" width="100%" height="512px"></iframe>
+<body onload="loadMarkdownFile()">
+    <div id="markdown-content"></div>
 </body>
 </html>
