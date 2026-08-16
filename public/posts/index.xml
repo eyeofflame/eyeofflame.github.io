@@ -14,7 +14,10 @@
       <pubDate>Sun, 16 Aug 2026 22:00:49 +0800</pubDate>
       <guid>http://localhost:1313/posts/start/</guid>
       <description>&lt;h1 id=&#34;我的天呐hugo大人&#34;&gt;我的天呐Hugo大人&lt;/h1&gt;
-&lt;p&gt;无实际内容，仅作示例&lt;/p&gt;</description>
+&lt;p&gt;无实际内容，仅作示例&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;hugo new posts/newPosts.md
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;使用该命令创建新的文章&lt;/p&gt;
+&lt;p&gt;暂未制作搜索及存档功能&lt;/p&gt;</description>
     </item>
   </channel>
 </rss>
