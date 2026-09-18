@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>对话剧本编辑器 · 节点画布</title>
+<style>
+:root{
+  --bg:#1b1b1b; --panel:#262626; --panel2:#2f2f2f; --line:#3a3a3a;
+  --fg:#ddd; --dim:#8a8a8a; --accent:#3f7fd4; --accent2:#c9a227;
+  --ok:#4caf7d; --warn:#d9a441; --err:#d9534f;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--bg); color:var(--fg);
+  font:12px/1.55 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  display:flex; flex-direction:column}
+
+button{background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+  border-radius:4px; padding:4px 9px; cursor:pointer; font:inherit}
+button:hover{background:#3a3a3a}
+button.primary{background:#2f4a76; border-color:#3f6396}
+button.primary:hover{background:#37578a}
+button.tiny{padding:1px 6px; font-size:11px}
+input,textarea,select{background:#1a1a1a; color:var(--fg); border:1px solid var(--line);
+  border-radius:3px; padding:3px 6px; font:inherit; width:100%}
+input:focus,textarea:focus,select:focus{outline:none; border-color:var(--accent)}
+textarea{resize:none; line-height:1.5}
+label{display:block; color:var(--dim); font-size:10px; margin-bottom:2px}
+
+/* ---------- 顶栏 ---------- */
+header{background:var(--panel); border-bottom:1px solid var(--line); flex:none}
+header .row{display:flex; gap:8px; align-items:flex-end; padding:7px 12px; flex-wrap:wrap}
+header .row + .row{border-top:1px solid var(--line); padding-top:5px; padding-bottom:5px; align-items:center}
+header .field{width:150px}
+header .field.wide{width:185px}
+header .spacer{flex:1}
+header .btns{display:flex; gap:5px; flex-wrap:wrap}
+#tabs{display:flex; gap:4px; flex-wrap:wrap; flex:1}
+.tab{padding:3px 10px; border-radius:4px 4px 0 0; border:1px solid var(--line);
+  border-bottom:none; background:#1f1f1f; cursor:pointer; color:var(--dim)}
+.tab.on{background:var(--bg); color:var(--fg); border-color:var(--accent)}
+.tab .x{color:var(--dim); margin-left:6px}
+.tab .x:hover{color:var(--err)}
+
+/* ---------- 主区 ---------- */
+main{flex:1; display:flex; min-height:0}
+
+#canvas{position:relative; flex:1; overflow:hidden; background-color:#1b1b1b;
+  background-image:radial-gradient(circle,#333 1px,transparent 1px);
+  cursor:grab; user-select:none}
+#canvas.panning{cursor:grabbing}
+#world{position:absolute; left:0; top:0; transform-origin:0 0}
+#wires{position:absolute; left:0; top:0; overflow:visible; pointer-events:none}
+.wire{fill:none; stroke:#6b7f9c; stroke-width:2}
+.wire.hit{stroke:transparent; stroke-width:14; pointer-events:stroke; cursor:pointer}
+.wire.bad{stroke:var(--err); stroke-dasharray:5 4}
+.wire.temp{stroke:var(--accent2); stroke-dasharray:6 4}
+#nodes{position:absolute; left:0; top:0}
+
+/* ---------- 节点 ---------- */
+.node{position:absolute; width:236px; background:#2a2a2a; border:1px solid #444;
+  border-radius:6px; box-shadow:0 4px 14px rgba(0,0,0,.45)}
+/* 内层裁圆角，外层不裁 —— 否则伸出去的端口会被切掉 */
+.node .inner{border-radius:5px; overflow:hidden}
+.node.sel{border-color:var(--accent2); box-shadow:0 0 0 1px var(--accent2),0 4px 14px rgba(0,0,0,.5)}
+.node .hd{height:26px; display:flex; align-items:center; gap:6px; padding:0 8px;
+  font-weight:600; font-size:11px; cursor:move; overflow:hidden}
+.node .hd .ttl{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.node .hd .kind{font-size:9px; padding:0 5px; border-radius:3px; background:rgba(0,0,0,.35); flex:none}
+.node.t-start .hd{background:#2f5d43}
+.node.t-line  .hd{background:#2f4668}
+.node.t-say   .hd{background:#3d4a6b}
+.node.t-branch .hd{background:#4a3d68}
+.node.t-end   .hd{background:#5a3a3a}
+.node .bd{padding:8px}
+.node .bd .f{margin-bottom:6px}
+.node .divider{height:1px; background:#3a3a3a; margin:6px -8px}
+.rowout{height:24px; display:flex; align-items:center; gap:4px; position:relative; padding-right:10px}
+.node .bd input,.node .bd select{height:22px}
+.node .bd textarea{height:54px}
+.rowout .lbl{font-size:10px; color:var(--dim); flex:none}
+.rowout input{flex:1; font-size:11px; padding:1px 5px; height:20px}
+.rowout .kill{color:var(--dim); cursor:pointer; flex:none; font-size:11px}
+.rowout .kill:hover{color:var(--err)}
+.node .addrow{padding:2px 0 0 2px}
+
+/* 端口 */
+.port{position:absolute; width:12px; height:12px; border-radius:50%;
+  border:2px solid #6b7f9c; background:#1b1b1b; z-index:3}
+.port:hover{background:var(--accent2); border-color:var(--accent2); cursor:crosshair}
+.port.in{left:-7px; top:7px; background:#3a4a5e}
+.rowout .port.out{right:-3px; top:50%; transform:translateY(-50%)}
+.port.bad{border-color:var(--err)}
+
+/* ---------- 右键菜单 ---------- */
+#menu{position:fixed; background:var(--panel); border:1px solid var(--line);
+  border-radius:5px; padding:4px; display:none; z-index:50; min-width:150px;
+  box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#menu div{padding:5px 10px; border-radius:3px; cursor:pointer; font-size:12px}
+#menu div:hover{background:#3a3a3a}
+#menu hr{border:none; border-top:1px solid var(--line); margin:4px 0}
+
+/* ---------- 侧栏 ---------- */
+#side{width:330px; flex:none; background:var(--panel); border-left:1px solid var(--line);
+  display:flex; flex-direction:column; overflow-y:auto; padding:10px}
+#side.hide{display:none}
+#stage{background:linear-gradient(180deg,#1a2432 0%,#0d1016 100%); border:1px solid var(--line);
+  border-radius:5px; overflow:hidden; position:relative; aspect-ratio:16/9; width:100%}
+#pvPortrait{position:absolute; inset:0; pointer-events:none}
+#pvPortrait img{position:absolute; left:50%; transform:translateX(-50%); image-rendering:pixelated}
+#pvBox{position:absolute; left:5%; right:5%; bottom:4%; height:30%; background:rgba(16,16,24,.82);
+  border:1px solid #6a7a9a; border-radius:2px; padding:6px 9px; overflow:hidden}
+#pvSpeaker{color:#d9a441; font-size:11px; font-weight:600}
+#pvText{color:#fff; font-size:11px; line-height:1.6; white-space:pre-wrap; word-break:break-word}
+#pvChoices{position:absolute; left:20%; right:20%; bottom:36%; display:flex; flex-direction:column; gap:4px}
+.pvChoice{background:rgba(0,0,0,.6); border:1px solid #8a8f9c; color:#fff; font-size:10px; padding:3px 8px; text-align:center}
+
+.portrait{display:flex; gap:7px; align-items:center; background:#232323; border:1px solid var(--line);
+  border-radius:5px; padding:5px; margin-bottom:5px}
+.portrait img{width:40px; height:40px; object-fit:contain; background:#141414; border-radius:3px; flex:none}
+.portrait .meta{flex:1; min-width:0; cursor:pointer}
+.portrait .nm{font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.portrait .pth{font-size:9px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#drop{border:1px dashed var(--line); border-radius:5px; padding:11px; text-align:center;
+  color:var(--dim); font-size:11px; margin-bottom:7px; cursor:pointer}
+#drop.over{border-color:var(--accent); background:#22303f}
+
+#problems{flex:none; padding:5px 12px; border-top:1px solid var(--line); background:var(--panel);
+  font-size:11px; max-height:100px; overflow-y:auto}
+#problems:empty{display:none}
+.prob{color:var(--warn)}
+.prob.err{color:var(--err)}
+.prob.ok{color:var(--ok)}
+.prob.note{color:var(--dim)}
+
+#toast{position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:#333;
+  border:1px solid var(--line); border-radius:5px; padding:7px 15px; opacity:0;
+  pointer-events:none; transition:opacity .2s; z-index:99; max-width:70vw; text-align:center}
+#toast.show{opacity:1}
+#hint{position:absolute; left:10px; bottom:8px; color:#5c5c5c; font-size:11px; pointer-events:none}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#3a3a3a;border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row">
+    <div class="field wide"><label>文件名</label><input id="fileName" value="dialogue.js"></div>
+    <div class="field"><label>命名空间</label><input id="namespace" value="solaris_compat"></div>
+    <div class="field wide"><label>立绘目录</label><input id="portraitDir" value="textures/gui/portrait"></div>
+    <div class="spacer"></div>
+    <div class="btns">
+      <button onclick="importJs()">导入 .js</button>
+      <button onclick="openProject()">打开项目</button>
+      <button onclick="saveProject()">保存项目</button>
+      <button class="primary" onclick="writeJs()">写回 .js</button>
+      <button class="primary" onclick="exportDatapack()">数据包…</button>
+      <button class="primary" onclick="exportResourcePack()">资源包…</button>
+      <button onclick="toggleSide()" title="显示/隐藏右侧预览">侧栏</button>
+    </div>
+  </div>
+  <div class="row">
+    <div id="tabs"></div>
+    <button class="tiny" onclick="addScript()">+ 剧本</button>
+    <button class="tiny" onclick="autoLayoutActive()" title="按剧情重新摆放节点">重新排版</button>
+    <button class="tiny" onclick="fitView()" title="缩放到全部节点可见">适应窗口</button>
+  </div>
+</header>
+
+<main>
+  <div id="canvas">
+    <div id="world">
+      <svg id="wires" width="20000" height="20000"></svg>
+      <div id="nodes"></div>
+    </div>
+    <div id="hint">拖动空白处平移 · 滚轮缩放 · 右键空白新建节点 · 右键节点删除 · 点连线断开</div>
+  </div>
+  <aside id="side">
+    <label style="font-size:11px">预览（当前选中节点）</label>
+    <div id="stage">
+      <div id="pvPortrait"></div>
+      <div id="pvChoices"></div>
+      <div id="pvBox"><div id="pvSpeaker"></div><div id="pvText"></div></div>
+    </div>
+    <label style="font-size:11px;margin-top:12px">立绘</label>
+    <div id="drop">点击或拖拽图片到这里上传<br>（自动转 PNG，并显示尺寸）</div>
+    <div id="portraitList"></div>
+  </aside>
+</main>
+
+<div id="problems"></div>
+<div id="toast"></div>
+<div id="menu"></div>
+
+<input type="file" id="jsInput" accept=".js,text/javascript" hidden>
+<input type="file" id="projInput" accept=".json,application/json" hidden>
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+<script>
+"use strict";
+
+/* ================================================================ 基础 */
+
+let uidN = 0;
+const nextUid = () => "u" + (++uidN);
+const $ = id => document.getElementById(id);
+const PORTRAIT_KEEP = "";
+const PORTRAIT_HIDE = "-";
+
+/* 节点宽度只用来算"适应窗口"的粗略边界；端口位置一律靠渲染后实测。
+   靠常量硬算太脆——margin 折叠、padding、字体都会让算式和实际对不上。 */
+const NODE_W = 236;
+const ROW_PITCH = 290;   // 自动排版时同一列的行距，比最高的节点还高就不会重叠
+
+/* 实测每个节点的端口中心（世界坐标）。每次节点 DOM 变动或拖动后调一次。 */
+function measurePorts() {
+  const s = activeScript();
+  if (!s) return;
+  const v = view(), r = $("canvas").getBoundingClientRect();
+  const toWorld = b => ({
+    x: (b.left + b.width / 2 - r.left - v.x) / v.zoom,
+    y: (b.top + b.height / 2 - r.top - v.y) / v.zoom,
+  });
+  for (const n of s.nodes) {
+    const el = document.querySelector('.node[data-uid="' + n.uid + '"]');
+    if (!el) { n._out = null; n._in = null; n._h = 200; continue; }
+    n._out = [...el.querySelectorAll(".port.out")].map(p => toWorld(p.getBoundingClientRect()));
+    const inEl = el.querySelector(".port.in");
+    n._in = inEl ? toWorld(inEl.getBoundingClientRect()) : { x: n.x, y: n.y + 13 };
+    n._h = el.getBoundingClientRect().height / v.zoom;
+  }
+}
+
+const outPort = (n, i) => (n._out && n._out[i]) || { x: n.x + NODE_W, y: n.y + 60 + i * 24 };
+const inPort  = n => n._in || { x: n.x, y: n.y + 13 };
+const nodeHeight = n => n._h || 220;
+
+let state = {
+  fileName: "dialogue.js",
+  namespace: "solaris_compat",
+  portraitDir: "textures/gui/portrait",
+  scripts: [],            // [{uid,id,start,nodes:[],view:{x,y,zoom}}]
+  activeScript: null,
+  selected: null,         // 节点 uid
+  portraits: [],
+  leftover: "",
+  side: true,
+};
+
+const activeScript = () => state.scripts.find(s => s.uid === state.activeScript) || null;
+const currentNode  = () => { const s = activeScript(); return s ? s.nodes.find(n => n.uid === state.selected) || null : null; };
+const view = () => { const s = activeScript(); if (!s) return null; return s.view || (s.view = { x: 60, y: 60, zoom: 1 }); };
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+/* ================================================================ 节点/剧本 CRUD */
+
+function mkNode(id, speaker, text, portrait, choices, next) {
+  return { uid: nextUid(), id: id || "", speaker: speaker || "", text: text || "",
+           portrait: portrait || PORTRAIT_KEEP, choices: choices || [], next: next || "", x: 0, y: 0 };
+}
+function uniqueNodeId(s, prefix) {
+  const taken = new Set(s.nodes.map(n => n.id));
+  let i = s.nodes.length + 1;
+  while (taken.has(prefix + i)) i++;
+  return prefix + i;
+}
+function newScriptObj(id) {
+  const s = { uid: nextUid(), id, start: "", nodes: [], view: { x: 60, y: 60, zoom: 1 } };
+  const n = mkNode("start", "", "第一句。", PORTRAIT_KEEP, [], "");
+  n.x = 60; n.y = 60;
+  s.nodes.push(n); s.start = "start";
+  return s;
+}
+function addScript() {
+  const taken = new Set(state.scripts.map(s => s.id));
+  let i = state.scripts.length + 1, id = "script_" + i;
+  while (taken.has(id)) id = "script_" + (++i);
+  const s = newScriptObj(id);
+  state.scripts.push(s);
+  state.activeScript = s.uid; state.selected = s.nodes[0].uid;
+  renderAll();
+}
+function deleteScript(u) {
+  const s = state.scripts.find(x => x.uid === u);
+  if (!s || !confirm("删除剧本「" + s.id + "」？")) return;
+  state.scripts = state.scripts.filter(x => x.uid !== u);
+  if (state.activeScript === u) {
+    state.activeScript = state.scripts.length ? state.scripts[0].uid : null;
+    state.selected = null;
+  }
+  renderAll();
+}
+function addNode(type, wx, wy) {
+  const s = activeScript();
+  if (!s) { toast("先建一个剧本（上面「+ 剧本」）"); return; }
+  const n = mkNode(uniqueNodeId(s, "node_"), "", "", PORTRAIT_KEEP,
+    type === "branch" ? [{ id: "opt_1", text: "", next: "" }] : [], "");
+  const v = view();
+  n.x = wx != null ? wx : -(v.x / v.zoom) + 80;
+  n.y = wy != null ? wy : -(v.y / v.zoom) + 80;
+  s.nodes.push(n);
+  if (!s.start) s.start = n.id;
+  state.selected = n.uid;
+  renderAll();
+}
+function deleteNode(u) {
+  const s = activeScript();
+  if (!s) return;
+  const n = s.nodes.find(x => x.uid === u);
+  if (!n) return;
+  s.nodes = s.nodes.filter(x => x.uid !== u);
+  // 别的节点指向它的一并清掉，免得留下悬空引用
+  for (const o of s.nodes) {
+    if (!o.choices.length && o.next === n.id) o.next = "";
+    for (const c of o.choices) if (c.next === n.id) c.next = "";
+  }
+  if (state.selected === u) state.selected = null;
+  if (!s.nodes.some(x => x.id === s.start)) s.start = s.nodes.length ? s.nodes[0].id : "";
+  renderAll();
+}
+function addChoice(u) {
+  const s = activeScript();
+  const n = s && s.nodes.find(x => x.uid === u);
+  if (!n) return;
+  const taken = new Set(n.choices.map(c => c.id));
+  let i = n.choices.length + 1;
+  while (taken.has("opt_" + i)) i++;
+  n.choices.push({ id: "opt_" + i, text: "", next: "" });
+  renderAll();
+}
+function removeChoice(u, i) {
+  const s = activeScript();
+  const n = s && s.nodes.find(x => x.uid === u);
+  if (!n) return;
+  n.choices.splice(i, 1);
+  renderAll();
+}
+
+/* ================================================================ 画布：平移 / 缩放 */
+
+function applyView() {
+  const v = view();
+  const c = $("canvas");
+  if (!v) return;
+  $("world").style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`;
+  const g = 20 * v.zoom;
+  c.style.backgroundSize = g + "px " + g + "px";
+  c.style.backgroundPosition = v.x + "px " + v.y + "px";
+}
+
+function screenToWorld(clientX, clientY) {
+  const v = view(), r = $("canvas").getBoundingClientRect();
+  return { x: (clientX - r.left - v.x) / v.zoom, y: (clientY - r.top - v.y) / v.zoom };
+}
+
+function fitView() {
+  const s = activeScript(), v = view();
+  if (!s || !s.nodes.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of s.nodes) {
+    x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y);
+    x1 = Math.max(x1, n.x + NODE_W); y1 = Math.max(y1, n.y + nodeHeight(n));
+  }
+  const r = $("canvas").getBoundingClientRect();
+  const pad = 40;
+  const z = Math.min(1.4, Math.min((r.width - pad*2) / (x1-x0), (r.height - pad*2) / (y1-y0)));
+  v.zoom = Math.max(0.2, z || 1);
+  v.x = pad - x0 * v.zoom + Math.max(0, (r.width  - pad*2 - (x1-x0)*v.zoom) / 2);
+  v.y = pad - y0 * v.zoom + Math.max(0, (r.height - pad*2 - (y1-y0)*v.zoom) / 2);
+  applyView();
+}
+
+function autoLayoutActive() {
+  const s = activeScript();
+  if (!s || !s.nodes.length) return;
+  layoutScript(s);
+  renderAll();
+  fitView();
+  toast("已重新排版");
+}
+
+/* 按剧情层级排：x 按 BFS 层号，y 按流程树的行号，同列再消一次重叠 */
+function layoutScript(s) {
+  const flow = buildFlow(s);
+  const rows = new Map();
+  let row = 0;
+  const place = u => {
+    const kids = flow.children.get(u) || [];
+    if (!kids.length) { rows.set(u, row++); return; }
+    const first = row;
+    for (const c of kids) place(c);
+    rows.set(u, (first + row - 1) / 2);
+  };
+  for (const r of flow.roots) place(r);
+  for (const o of flow.orphans) rows.set(o, row++);
+
+  for (const n of s.nodes) {
+    const lv = flow.level.has(n.uid) ? flow.level.get(n.uid) : 0;
+    n.x = 60 + lv * (NODE_W + 90);
+    n.y = 60 + (rows.get(n.uid) ?? 0) * 30;
+  }
+  // 同一列里把重叠的往下推
+  const byLevel = new Map();
+  for (const n of s.nodes) {
+    const lv = flow.level.has(n.uid) ? flow.level.get(n.uid) : 0;
+    if (!byLevel.has(lv)) byLevel.set(lv, []);
+    byLevel.get(lv).push(n);
+  }
+  for (const list of byLevel.values()) {
+    list.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < list.length; i++) {
+      const min = list[i-1].y + ROW_PITCH;
+      if (list[i].y < min) list[i].y = min;
+    }
+  }
+}
+
+/* ================================================================ 画布：渲染 */
+
+function nodeType(n, s) {
+  if (n.id === s.start) return "start";
+  if (n.choices.length) return "branch";
+  if (!n.next) return "end";
+  return n.speaker ? "say" : "line";
+}
+const TYPE_LABEL = { start:"起始", line:"旁白", say:"对白", branch:"分支", end:"结束" };
+
+function wirePath(a, b) {
+  const dx = Math.max(50, Math.abs(b.x - a.x) * 0.5);
+  return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
+}
+
+function renderCanvas() {
+  const s = activeScript();
+  const nodesBox = $("nodes"), svg = $("wires");
+  nodesBox.innerHTML = "";
+  svg.innerHTML = "";
+  if (!s) { applyView(); return; }
+
+  // 顺序很重要：节点先进 DOM 并应用视图变换，才能实测到端口真实位置
+  for (const n of s.nodes) nodesBox.appendChild(buildNodeDom(s, n));
+  applyView();
+  measurePorts();
+  renderWiresOnly();
+}
+
+function buildNodeDom(s, n) {
+  const type = nodeType(n, s);
+  const el = document.createElement("div");
+  el.className = "node t-" + type + (state.selected === n.uid ? " sel" : "");
+  el.dataset.uid = n.uid;
+  el.style.left = n.x + "px";
+  el.style.top = n.y + "px";
+
+  const inner = document.createElement("div");
+  inner.className = "inner";
+
+  const hd = document.createElement("div");
+  hd.className = "hd";
+  const ttl = document.createElement("span");
+  ttl.className = "ttl";
+  ttl.textContent = n.id || "(未命名)";
+  hd.appendChild(ttl);
+  const kind = document.createElement("span");
+  kind.className = "kind";
+  kind.textContent = TYPE_LABEL[type];
+  hd.appendChild(kind);
+  hd.onmousedown = e => startNodeDrag(e, s, n, el);
+  hd.onclick = e => { e.stopPropagation(); select(n.uid); };
+  inner.appendChild(hd);
+
+  const bd = document.createElement("div");
+  bd.className = "bd";
+
+  const f1 = document.createElement("div");
+  f1.className = "f";
+  const iId = document.createElement("input");
+  iId.value = n.id;
+  iId.placeholder = "节点 id";
+  iId.oninput = () => { n.id = iId.value.trim(); ttl.textContent = n.id || "(未命名)"; renderWiresOnly(); validate(); autosave(); };
+  iId.onmousedown = e => e.stopPropagation();
+  iId.onfocus = () => select(n.uid);
+  f1.appendChild(iId);
+  bd.appendChild(f1);
+
+  const f2 = document.createElement("div");
+  f2.className = "f";
+  const iSp = document.createElement("input");
+  iSp.value = n.speaker;
+  iSp.placeholder = "说话人（留空 = 旁白）";
+  iSp.oninput = () => { n.speaker = iSp.value; renderPreview(); autosave(); };
+  iSp.onmousedown = e => e.stopPropagation();
+  iSp.onfocus = () => select(n.uid);
+  f2.appendChild(iSp);
+  bd.appendChild(f2);
+
+  const f3 = document.createElement("div");
+  f3.className = "f";
+  const iTx = document.createElement("textarea");
+  iTx.rows = 3;
+  iTx.value = n.text;
+  iTx.placeholder = "正文";
+  iTx.oninput = () => { n.text = iTx.value; renderPreview(); autosave(); };
+  iTx.onmousedown = e => e.stopPropagation();
+  iTx.onfocus = () => select(n.uid);
+  f3.appendChild(iTx);
+  bd.appendChild(f3);
+
+  const f4 = document.createElement("div");
+  f4.className = "f";
+  const selP = document.createElement("select");
+  selP.innerHTML = '<option value="' + PORTRAIT_KEEP + '">立绘：沿用上一个</option>' +
+                   '<option value="' + PORTRAIT_HIDE + '">立绘：收起</option>';
+  for (const p of state.portraits) {
+    const o = document.createElement("option");
+    o.value = p.path; o.textContent = "立绘：" + p.name;
+    selP.appendChild(o);
+  }
+  if (n.portrait && n.portrait !== PORTRAIT_KEEP && n.portrait !== PORTRAIT_HIDE &&
+      !state.portraits.some(p => p.path === n.portrait)) {
+    const o = document.createElement("option");
+    o.value = n.portrait; o.textContent = "⚠ " + n.portrait;
+    selP.appendChild(o);
+  }
+  selP.value = n.portrait;
+  selP.onchange = () => { n.portrait = selP.value; renderPreview(); validate(); autosave(); };
+  selP.onmousedown = e => e.stopPropagation();
+  selP.onfocus = () => select(n.uid);
+  f4.appendChild(selP);
+  bd.appendChild(f4);
+
+  bd.appendChild(Object.assign(document.createElement("div"), { className: "divider" }));
+
+  const outs = n.choices.length ? n.choices : [{ id: null, text: "", next: n.next }];
+  outs.forEach((c, i) => {
+    const row = document.createElement("div");
+    row.className = "rowout";
+
+    if (c.id !== null) {
+      const lb = document.createElement("span");
+      lb.className = "lbl"; lb.textContent = "选";
+      row.appendChild(lb);
+      const inp = document.createElement("input");
+      inp.value = c.text; inp.placeholder = "选项文字";
+      inp.oninput = () => { c.text = inp.value; renderPreview(); autosave(); };
+      inp.onmousedown = e => e.stopPropagation();
+      inp.onfocus = () => select(n.uid);
+      row.appendChild(inp);
+      const kill = document.createElement("span");
+      kill.className = "kill"; kill.textContent = "✕"; kill.title = "删掉这个选项";
+      kill.onclick = e => { e.stopPropagation(); removeChoice(n.uid, i); };
+      kill.onmousedown = e => e.stopPropagation();
+      row.appendChild(kill);
+    } else {
+      const lb = document.createElement("span");
+      lb.className = "lbl";
+      lb.textContent = n.next || "（结束，没接下一步）";
+      row.appendChild(lb);
+    }
+
+    const port = document.createElement("div");
+    port.className = "port out" + (c.next && !new Set(s.nodes.map(x => x.id)).has(c.next) ? " bad" : "");
+    port.title = "从这里拖到另一个节点上连线";
+    port.onmousedown = e => { e.stopPropagation(); startWire(e, s, n, i); };
+    row.appendChild(port);
+    bd.appendChild(row);
+  });
+
+  if (n.choices.length) {
+    const add = document.createElement("div");
+    add.className = "addrow";
+    const b = document.createElement("button");
+    b.className = "tiny"; b.textContent = "+ 选项";
+    b.onclick = e => { e.stopPropagation(); addChoice(n.uid); };
+    b.onmousedown = e => e.stopPropagation();
+    add.appendChild(b);
+    bd.appendChild(add);
+  }
+
+  inner.appendChild(bd);
+  el.appendChild(inner);
+
+  const inP = document.createElement("div");
+  inP.className = "port in";
+  el.appendChild(inP);
+
+  el.onmousedown = e => { e.stopPropagation(); select(n.uid); };
+  return el;
+}
+
+/** 只重画连线（拖拽、改 id 时用，不重建 DOM，免得输入框失焦） */
+function renderWiresOnly() {
+  const s = activeScript();
+  if (!s) return;
+  const svg = $("wires");
+  svg.innerHTML = "";
+
+  const byId = new Map(s.nodes.map(n => [n.id, n]));
+  const add = (a, b, bad, onHit) => {
+    for (const [cls, hook] of [["wire" + (bad ? " bad" : ""), null], ["wire hit", onHit]]) {
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", wirePath(a, b));
+      p.setAttribute("class", cls);
+      if (hook) p.onclick = hook;
+      svg.appendChild(p);
+    }
+  };
+  for (const n of s.nodes) {
+    if (n.choices.length) {
+      n.choices.forEach((c, i) => {
+        if (!c.next) return;
+        const t = byId.get(c.next);
+        const a = outPort(n, i);
+        add(a, t ? inPort(t) : { x: a.x + 70, y: a.y + 50 },
+            !t, e => { e.stopPropagation(); disconnect(n, i); });
+      });
+    } else if (n.next) {
+      const t = byId.get(n.next);
+      const a = outPort(n, 0);
+      add(a, t ? inPort(t) : { x: a.x + 70, y: a.y + 50 },
+          !t, e => { e.stopPropagation(); disconnect(n, 0); });
+    }
+  }
+}
+
+function select(u) {
+  state.selected = u;
+  document.querySelectorAll(".node").forEach(el =>
+    el.classList.toggle("sel", el.dataset.uid === u));
+  renderPreview();
+  autosave();
+}
+
+/* ================================================================ 交互：拖动节点 / 连线 */
+
+let drag = null;
+
+function startNodeDrag(e, s, n, el) {
+  if (e.button !== 0) return;
+  const v = view();
+  drag = { kind: "node", s, n, el, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, zoom: v.zoom };
+  document.body.style.cursor = "grabbing";
+  e.preventDefault();
+}
+
+function startWire(e, s, n, i) {
+  if (e.button !== 0) return;
+  const v = view();
+  const p = outPort(n, i);
+  const temp = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  temp.setAttribute("class", "wire temp");
+  $("wires").appendChild(temp);
+  drag = { kind: "wire", s, n, i, temp };
+  e.preventDefault();
+}
+
+function onMouseMove(e) {
+  if (!drag) return;
+  if (drag.kind === "node") {
+    const v = view();
+    drag.n.x = Math.round(drag.ox + (e.clientX - drag.sx) / v.zoom);
+    drag.n.y = Math.round(drag.oy + (e.clientY - drag.sy) / v.zoom);
+    drag.el.style.left = drag.n.x + "px";
+    drag.el.style.top = drag.n.y + "px";
+    measurePorts();
+    renderWiresOnly();
+  } else if (drag.kind === "wire") {
+    const w = screenToWorld(e.clientX, e.clientY);
+    drag.temp.setAttribute("d", wirePath(outPort(drag.n, drag.i), w));
+  } else if (drag.kind === "pan") {
+    const v = view();
+    v.x = drag.ox + (e.clientX - drag.sx);
+    v.y = drag.oy + (e.clientY - drag.sy);
+    applyView();
+  }
+}
+
+function onMouseUp(e) {
+  if (!drag) return;
+  if (drag.kind === "node") {
+    autosave();
+  } else if (drag.kind === "wire") {
+    drag.temp.remove();
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const nodeEl = el && el.closest ? el.closest(".node") : null;
+    if (nodeEl) {
+      const target = drag.s.nodes.find(n => n.uid === nodeEl.dataset.uid);
+      if (target) connect(drag.n, drag.i, target);
+      else toast("找不到目标节点");
+    }
+  }
+  document.body.style.cursor = "";
+  drag = null;
+}
+
+function connect(from, i, to) {
+  if (from.uid === to.uid && from.choices.length === 0) { toast("不能接回自己"); return; }
+  if (from.choices.length) from.choices[i].next = to.id;
+  else from.next = to.id;
+  renderAll();
+  toast("已连接 " + from.id + " → " + to.id);
+}
+
+function disconnect(from, i) {
+  if (from.choices.length) {
+    if (!from.choices[i].next) return;
+    from.choices[i].next = "";
+  } else {
+    if (!from.next) return;
+    from.next = "";
+  }
+  renderAll();
+  toast("已断开 " + from.id + " 的这条连线");
+}
+
+/* ================================================================ 画布事件 */
+
+function bindCanvas() {
+  const c = $("canvas");
+
+  c.addEventListener("mousedown", e => {
+    if (e.target.closest(".node")) return;
+    hideMenu();
+    if (e.button === 0 || e.button === 1) {
+      const v = view();
+      drag = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: v.x, oy: v.y };
+      c.classList.add("panning");
+      e.preventDefault();
+    }
+  });
+
+  c.addEventListener("wheel", e => {
+    const v = view();
+    if (!v) return;
+    e.preventDefault();
+    const r = c.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const wx = (mx - v.x) / v.zoom, wy = (my - v.y) / v.zoom;
+    v.zoom = Math.min(2.5, Math.max(0.15, v.zoom * Math.exp(-e.deltaY * 0.0012)));
+    v.x = mx - wx * v.zoom;
+    v.y = my - wy * v.zoom;
+    applyView();
+    autosave();
+  }, { passive: false });
+
+  c.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    const nodeEl = e.target.closest(".node");
+    if (nodeEl) {
+      const uid = nodeEl.dataset.uid;
+      showMenu(e.clientX, e.clientY, [
+        ["删除这个节点", () => deleteNode(uid)],
+      ]);
+    } else {
+      const w = screenToWorld(e.clientX, e.clientY);
+      showMenu(e.clientX, e.clientY, [
+        ["新增旁白节点", () => addNode("line", w.x, w.y)],
+        ["新增分支节点", () => addNode("branch", w.x, w.y)],
+        null,
+        ["重新排版", () => autoLayoutActive()],
+        ["适应窗口", () => fitView()],
+      ]);
+    }
+  });
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", e => {
+    $("canvas").classList.remove("panning");
+    onMouseUp(e);
+  });
+  c.addEventListener("click", e => { if (!e.target.closest(".node")) { select(null); hideMenu(); } });
+}
+
+function showMenu(x, y, items) {
+  const m = $("menu");
+  m.innerHTML = "";
+  for (const it of items) {
+    if (!it) { m.appendChild(document.createElement("hr")); continue; }
+    const d = document.createElement("div");
+    d.textContent = it[0];
+    d.onclick = () => { hideMenu(); it[1](); };
+    m.appendChild(d);
+  }
+  m.style.left = x + "px";
+  m.style.top = y + "px";
+  m.style.display = "block";
+}
+function hideMenu() { $("menu").style.display = "none"; }
+
+document.addEventListener("mousedown", e => { if (!e.target.closest("#menu")) hideMenu(); });
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input,textarea")) return;
+  if (e.key === "Delete" && state.selected) deleteNode(state.selected);
+});
+
+/* ================================================================ 侧栏：预览 + 立绘 */
+
+function portraitInEffect(s, node) {
+  let cur = "";
+  for (const n of s.nodes) {
+    if (n.portrait === PORTRAIT_HIDE) cur = "";
+    else if (n.portrait) cur = n.portrait;
+    if (n === node) break;
+  }
+  return cur;
+}
+
+function renderPreview() {
+  const s = activeScript(), n = currentNode();
+  const pv = $("pvPortrait"), ch = $("pvChoices");
+  pv.innerHTML = ""; ch.innerHTML = "";
+  if (!n) { $("pvSpeaker").textContent = ""; $("pvText").textContent = "← 点一个节点看预览"; return; }
+  $("pvSpeaker").textContent = n.speaker || "";
+  $("pvSpeaker").style.display = n.speaker ? "" : "none";
+  $("pvText").textContent = n.text || "(空)";
+
+  const p = state.portraits.find(x => x.path === portraitInEffect(s, n));
+  if (p) {
+    const img = document.createElement("img");
+    img.src = p.dataUrl;
+    const stageH = $("stage").clientHeight || 180;
+    const h = stageH * 0.62;
+    img.style.height = h + "px";
+    img.style.width = (h * p.w / p.h) + "px";
+    img.style.bottom = (stageH * 0.34) + "px";
+    pv.appendChild(img);
+  }
+  for (const c of n.choices) {
+    const d = document.createElement("div");
+    d.className = "pvChoice";
+    d.textContent = c.text || "(空选项)";
+    ch.appendChild(d);
+  }
+}
+
+function renderPortraits() {
+  const box = $("portraitList");
+  box.innerHTML = "";
+  if (!state.portraits.length) {
+    box.innerHTML = '<div style="color:var(--dim);font-size:11px">还没有立绘</div>';
+    return;
+  }
+  for (const p of state.portraits) {
+    const el = document.createElement("div");
+    el.className = "portrait";
+    el.innerHTML = '<img><div class="meta"><div class="nm"></div><div class="pth"></div></div>' +
+                   '<button class="del tiny">✕</button>';
+    el.querySelector("img").src = p.dataUrl;
+    el.querySelector(".nm").textContent = p.name + "　" + p.w + "×" + p.h;
+    el.querySelector(".pth").textContent = p.path;
+    el.querySelector(".meta").onclick = () => {
+      const n = currentNode();
+      if (!n) { toast("先在画布上点一个节点"); return; }
+      n.portrait = p.path;
+      renderAll();
+      toast("已把「" + p.name + "」设为该节点的立绘");
+    };
+    el.querySelector(".del").onclick = () => {
+      state.portraits = state.portraits.filter(x => x !== p);
+      renderAll();
+    };
+    box.appendChild(el);
+  }
+}
+
+function portraitPathFor(name) {
+  const dir = state.portraitDir.replace(/^\/+|\/+$/g, "");
+  return state.namespace + ":" + (dir ? dir + "/" : "") + name + ".png";
+}
+
+function handleFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const cv = document.createElement("canvas");
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        cv.getContext("2d").drawImage(img, 0, 0);
+        let base = f.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9_\-]/g, "_") || "portrait";
+        let name = base, i = 2;
+        while (state.portraits.some(p => p.name === name)) name = base + "_" + (i++);
+        state.portraits.push({ name, path: portraitPathFor(name),
+          dataUrl: cv.toDataURL("image/png"), w: cv.width, h: cv.height });
+        renderAll();
+        toast("已添加立绘 " + name + "（" + cv.width + "×" + cv.height + "）");
+      };
+      img.onerror = () => toast("读不了这个图片：" + f.name);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  }
+}
+
+function toggleSide() {
+  state.side = !state.side;
+  $("side").classList.toggle("hide", !state.side);
+  autosave();
+}
+
+/* ================================================================ 校验 */
+
+function validate() {
+  const box = $("problems");
+  const P = [];
+  const err = m => P.push(["err", m]), warn = m => P.push(["warn", m]);
+
+  if (!state.fileName.trim()) err("文件名是空的");
+  if (!state.scripts.length) err("一个剧本都没有");
+
+  const sids = new Map();
+  for (const s of state.scripts) {
+    if (!s.id) err("有剧本没填 ID");
+    sids.set(s.id, (sids.get(s.id) || 0) + 1);
+  }
+  for (const [id, c] of sids) if (c > 1 && id) err("剧本 ID 重复：" + id);
+
+  for (const s of state.scripts) {
+    const at = m => "「" + s.id + "」" + m;
+    if (!s.nodes.length) { err(at("一个节点都没有")); continue; }
+    const ids = new Map();
+    for (const n of s.nodes) { if (!n.id) err(at("有节点没填 ID")); ids.set(n.id, (ids.get(n.id)||0)+1); }
+    for (const [id, c] of ids) if (c > 1 && id) err(at("节点 ID 重复：" + id));
+    if (!s.nodes.some(n => n.id === s.start)) err(at("起始节点 " + (s.start || "(空)") + " 不存在"));
+
+    const chk = t => { if (t && !ids.has(t)) err(at("连到了不存在的节点：" + t)); };
+    for (const n of s.nodes) {
+      if (n.choices.length) {
+        const seen = new Set();
+        for (const c of n.choices) {
+          if (!c.id) err(at(n.id + " 有选项没填 id"));
+          else if (seen.has(c.id)) err(at(n.id + " 里选项 id 重复：" + c.id));
+          seen.add(c.id);
+          if (!c.next) warn(at(n.id + " 的选项「" + (c.text || c.id) + "」还没接线，会被当成结束"));
+          chk(c.next);
+        }
+      } else {
+        if (!n.next) warn(at(n.id + " 还没接下一步（会被当成剧情结束）"));
+        chk(n.next);
+      }
+      if (n.portrait && n.portrait !== PORTRAIT_KEEP && n.portrait !== PORTRAIT_HIDE &&
+          !state.portraits.some(p => p.path === n.portrait)) warn(at(n.id + " 的立绘没上传"));
+    }
+
+    if (s.nodes.some(n => n.id === s.start)) {
+      const flow = buildFlow(s);
+      for (const n of s.nodes) if (n.id && !flow.level.has(n.uid)) warn(at("从起始节点走不到：" + n.id));
+    }
+  }
+
+  if (state.leftover.trim()) {
+    P.push(["note", "文件里还有约 " + state.leftover.split("\n").length + " 行非剧本代码，导出时原样保留"]);
+  }
+
+  const hasErr = P.some(([k]) => k === "err");
+  box.innerHTML = P.length
+    ? P.map(([k, m]) => '<div class="prob ' + k + '">' +
+        (k === "err" ? "✕ " : k === "warn" ? "! " : "· ") + esc(m) + '</div>').join("")
+    : '<div class="prob ok">✓ 没问题，可以导出了</div>';
+  return !hasErr;
+}
+
+/* ================================================================ 剧情流程图（排版 & 走不到检查用） */
+
+function edgesOf(script) {
+  const byId = new Map(script.nodes.map(n => [n.id, n]));
+  const out = new Map(script.nodes.map(n => [n.uid, []]));
+  for (const n of script.nodes) {
+    if (n.choices.length) {
+      n.choices.forEach((c, i) => {
+        const t = byId.get(c.next);
+        if (t) out.get(n.uid).push({ to: t.uid, kind: "choice", label: c.text || c.id, order: i });
+      });
+    } else if (n.next) {
+      const t = byId.get(n.next);
+      if (t) out.get(n.uid).push({ to: t.uid, kind: "next", label: "", order: 0 });
+    }
+  }
+  return out;
+}
+
+function buildFlow(script) {
+  const byUid = new Map(script.nodes.map(n => [n.uid, n]));
+  const edges = edgesOf(script);
+
+  const level = new Map();
+  const startNode = script.nodes.find(n => n.id === script.start);
+  if (startNode) {
+    level.set(startNode.uid, 0);
+    const q = [startNode.uid];
+    while (q.length) {
+      const cur = q.shift();
+      for (const e of edges.get(cur)) {
+        const nl = level.get(cur) + 1;
+        if (!level.has(e.to) || nl < level.get(e.to)) { level.set(e.to, nl); q.push(e.to); }
+      }
+    }
+  }
+
+  const predsOf = new Map(script.nodes.map(n => [n.uid, []]));
+  for (const [from, list] of edges) for (const e of list) predsOf.get(e.to).push(from);
+
+  const parent = new Map(), children = new Map(script.nodes.map(n => [n.uid, []])), edgeOrder = new Map();
+  const chainOf = u => { const o = []; let c = u, g = 0;
+    while (c != null && g++ < 4096) { o.push(c); c = parent.has(c) ? parent.get(c) : null; } return o; };
+  const lca = (a, b) => { const S = new Set(chainOf(b));
+    for (const u of chainOf(a)) if (S.has(u)) return u; return null; };
+
+  const order = [...script.nodes].sort((a, b) =>
+    (level.has(a.uid) ? level.get(a.uid) : Number.MAX_SAFE_INTEGER) -
+    (level.has(b.uid) ? level.get(b.uid) : Number.MAX_SAFE_INTEGER));
+
+  for (const n of order) {
+    if (!level.has(n.uid)) { parent.set(n.uid, null); continue; }
+    const ps = predsOf.get(n.uid);
+    if (!ps.length) { parent.set(n.uid, null); continue; }
+    const lv = level.get(n.uid);
+    let cands = ps.filter(p => level.get(p) === lv - 1);
+    if (!cands.length) cands = ps;
+
+    let p, ord = 0;
+    if (cands.length === 1) {
+      p = cands[0] !== n.uid ? cands[0] : null;
+      const e = p != null ? edges.get(p).find(x => x.to === n.uid) : null;
+      if (e) ord = e.order;
+    } else {
+      let q = cands[0];
+      for (let i = 1; i < cands.length; i++) q = lca(q, cands[i]) ?? q;
+      if (q === n.uid || (q != null && chainOf(q).includes(n.uid))) q = null;
+      p = q; ord = Number.MAX_SAFE_INTEGER;
+    }
+    parent.set(n.uid, p);
+    edgeOrder.set(n.uid, ord);
+    if (p != null) { children.get(p).push(n.uid); }
+  }
+  // 子节点按"来源选项"的顺序排，排版时看起来才跟剧情一致
+  for (const list of children.values()) {
+    list.sort((a, b) => (edgeOrder.get(a) ?? 0) - (edgeOrder.get(b) ?? 0));
+  }
+
+  const roots = [], orphans = [];
+  for (const n of script.nodes) {
+    if (parent.get(n.uid) == null) (level.has(n.uid) ? roots : orphans).push(n.uid);
+  }
+  return { byUid, level, children, roots, orphans };
+}
+
+/* ================================================================ 生成 / 解析 js */
+
+const jsStr = s => "'" + String(s == null ? "" : s)
+  .replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r/g, "").replace(/\n/g, "\\n") + "'";
+
+function portraitSuffix(n) {
+  if (n.portrait === PORTRAIT_HIDE) return ".portrait(SolarisDialogue.HIDE_PORTRAIT)";
+  if (n.portrait) return ".portrait(" + jsStr(n.portrait) + ")";
+  return "";
+}
+
+function buildJs() {
+  const L = [];
+  L.push("// 由对话编辑器生成 —— " + new Date().toLocaleString());
+  L.push("// 改完在游戏里执行 /reload 生效");
+  L.push("");
+  L.push("SolarisRPG.scripts(event => {");
+  for (const s of state.scripts) {
+    L.push("");
+    L.push("    event.create(" + jsStr(s.id) + ", script => {");
+    L.push("        script.start(" + jsStr(s.start) + ")");
+    L.push("");
+    for (const n of s.nodes) {
+      if (n.choices.length) {
+        L.push("        script.choose(" + jsStr(n.id) + ", " + jsStr(n.speaker) + ", " + jsStr(n.text) + ", c => {");
+        for (const c of n.choices) L.push("            c.option(" + jsStr(c.id) + ", " + jsStr(c.text) + ", " + jsStr(c.next) + ")");
+        L.push("        })" + portraitSuffix(n));
+      } else if (n.speaker) {
+        L.push("        script.say(" + jsStr(n.id) + ", " + jsStr(n.speaker) + ", " + jsStr(n.text) + ", " + jsStr(n.next) + ")" + portraitSuffix(n));
+      } else {
+        L.push("        script.line(" + jsStr(n.id) + ", " + jsStr(n.text) + ", " + jsStr(n.next) + ")");
+      }
+    }
+    L.push("    })");
+  }
+  L.push("})");
+  let out = L.join("\n") + "\n";
+  if (state.leftover.trim()) {
+    out += "\n// ======== 以下是文件里原有的其它代码，编辑器没有改动 ========\n\n" +
+           state.leftover.replace(/\s+$/, "") + "\n";
+  }
+  return out;
+}
+
+function buildDatapackJson(s) {
+  return JSON.stringify({
+    start: s.start,
+    nodes: s.nodes.map(n => {
+      const o = { id: n.id };
+      if (n.speaker) o.speaker = n.speaker;
+      o.text = n.text;
+      if (n.portrait) o.portrait = n.portrait;
+      if (n.choices.length) o.choices = n.choices.map(c => ({ id: c.id, text: c.text, next: c.next }));
+      else o.next = n.next;
+      return o;
+    }),
+  }, null, 2) + "\n";
+}
+
+function buildProject() {
+  return JSON.stringify({
+    format: "solaris-dialogue-editor/3",
+    fileName: state.fileName, namespace: state.namespace, portraitDir: state.portraitDir,
+    leftover: state.leftover, side: state.side,
+    scripts: state.scripts.map(s => ({
+      id: s.id, start: s.start, view: s.view,
+      nodes: s.nodes.map(n => ({ id: n.id, speaker: n.speaker, text: n.text, portrait: n.portrait,
+        choices: n.choices, next: n.next, x: n.x, y: n.y })),
+    })),
+    portraits: state.portraits,
+  }, null, 2) + "\n";
+}
+
+/* ---- 解析：分词 + 语句匹配，不认识的原样留在 leftover ---- */
+
+function tokenize(src) {
+  const out = [];
+  let i = 0, line = 1;
+  const idS = c => /[A-Za-z_$]/.test(c), idP = c => /[A-Za-z0-9_$]/.test(c);
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "\n") { line++; i++; continue; }
+    if (c === " " || c === "\t" || c === "\r") { i++; continue; }
+    if (c === "/" && src[i+1] === "/") { while (i < src.length && src[i] !== "\n") i++; continue; }
+    if (c === "/" && src[i+1] === "*") { i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i+1] === "/")) { if (src[i] === "\n") line++; i++; }
+      i += 2; continue; }
+    if (c === '"' || c === "'" || c === "`") {
+      const q = c, start = i, ln = line; let j = i + 1, v = "";
+      while (j < src.length && src[j] !== q) {
+        if (src[j] === "\\") { const n = src[j+1];
+          v += n === "n" ? "\n" : n === "t" ? "\t" : n === "r" ? "\r" : n; j += 2; }
+        else { if (src[j] === "\n") line++; v += src[j]; j++; }
+      }
+      out.push({ t:"str", v, line: ln, s: start, e: j + 1 }); i = j + 1; continue;
+    }
+    if (idS(c)) { const st = i; while (i < src.length && idP(src[i])) i++;
+      out.push({ t:"id", v: src.slice(st, i), line, s: st, e: i }); continue; }
+    if (/[0-9]/.test(c)) { const st = i; while (i < src.length && /[0-9.]/.test(src[i])) i++;
+      out.push({ t:"num", v: src.slice(st, i), line, s: st, e: i }); continue; }
+    const two = src.substr(i, 2);
+    if (two === "=>" || two === "===" || two === "!==" || two === "&&" || two === "||" || two === "?.") {
+      out.push({ t:"op", v: two, line, s: i, e: i+2 }); i += 2; continue; }
+    out.push({ t:"op", v: c, line, s: i, e: i+1 }); i++;
+  }
+  return out;
+}
+const isOp = (t, v) => t && t.t === "op" && t.v === v;
+const isId = (t, v) => t && t.t === "id" && t.v === v;
+
+function matchBracket(tk, i) {
+  const open = tk[i].v, close = open === "(" ? ")" : open === "{" ? "}" : "]";
+  let d = 0;
+  for (let j = i; j < tk.length; j++) {
+    if (tk[j].t !== "op") continue;
+    if (tk[j].v === open) d++;
+    else if (tk[j].v === close) { d--; if (d === 0) return j; }
+  }
+  return -1;
+}
+
+function grabCallback(tk, i) {
+  let params = [], j = i;
+  if (isOp(tk[j], "(")) {
+    const close = matchBracket(tk, j);
+    if (close < 0) return null;
+    for (let k = j + 1; k < close; k++) if (tk[k].t === "id") params.push(tk[k].v);
+    j = close + 1;
+  } else if (tk[j] && tk[j].t === "id") { params.push(tk[j].v); j++; }
+  else return null;
+  if (!isOp(tk[j], "=>")) return null;
+  j++;
+  if (!isOp(tk[j], "{")) return null;
+  const end = matchBracket(tk, j);
+  if (end < 0) return null;
+  return { params, bodyStart: j + 1, bodyEnd: end, end: end + 1 };
+}
+
+function parseArgs(tk, i) {
+  const close = matchBracket(tk, i);
+  if (close < 0) return null;
+  const values = [];
+  let j = i + 1;
+  while (j < close) {
+    if (isOp(tk[j], ",")) { j++; continue; }
+    const cb = grabCallback(tk, j);
+    if (cb && cb.end <= close) {
+      values.push({ kind:"callback", params: cb.params, bodyStart: cb.bodyStart, bodyEnd: cb.bodyEnd });
+      j = cb.end;
+    } else if (tk[j].t === "str") { values.push({ kind:"str", v: tk[j].v }); j++; }
+    else {
+      let d = 0, k = j;
+      while (k < close) {
+        if (tk[k].t === "op") {
+          if ("([{".includes(tk[k].v)) d++;
+          else if (")]}".includes(tk[k].v)) d--;
+          else if (tk[k].v === "," && d === 0) break;
+        }
+        k++;
+      }
+      values.push({ kind:"other", v: tk.slice(j, k).map(t => t.v).join("") });
+      j = k;
+    }
+    if (isOp(tk[j], ",")) j++;
+  }
+  return { values, end: close + 1 };
+}
+
+function parseScriptBody(tk, cb, id) {
+  const s = { uid: nextUid(), id, start: "", nodes: [] };
+  const v = cb.params[0];
+  if (!v) return s;
+  const arg = (a, n) => (a.values[n] && a.values[n].kind === "str") ? a.values[n].v : "";
+
+  for (let i = cb.bodyStart; i < cb.bodyEnd; i++) {
+    if (!(tk[i] && tk[i].t === "id" && tk[i].v === v)) continue;
+    if (!isOp(tk[i+1], ".") || !tk[i+2] || tk[i+2].t !== "id" || !isOp(tk[i+3], "(")) continue;
+    const method = tk[i+2].v;
+    const a = parseArgs(tk, i + 3);
+    if (!a) continue;
+
+    let portrait = "";
+    let k = a.end;
+    while (isOp(tk[k], ".") && tk[k+1] && tk[k+1].t === "id" && isOp(tk[k+2], "(")) {
+      const pa = parseArgs(tk, k + 2);
+      if (!pa) break;
+      if (tk[k+1].v === "portrait" && pa.values[0]) {
+        if (pa.values[0].kind === "str") portrait = pa.values[0].v;
+        else if (/HIDE_PORTRAIT/.test(pa.values[0].v || "")) portrait = PORTRAIT_HIDE;
+      }
+      k = pa.end;
+    }
+    i = k - 1;
+
+    if (method === "start") s.start = arg(a, 0);
+    else if (method === "line") s.nodes.push(mkNode(arg(a,0), "", arg(a,1), portrait, [], arg(a,2)));
+    else if (method === "say")  s.nodes.push(mkNode(arg(a,0), arg(a,1), arg(a,2), portrait, [], arg(a,3)));
+    else if (method === "choose") {
+      const choices = [];
+      const ccb = a.values[3];
+      if (ccb && ccb.kind === "callback") {
+        const cv = ccb.params[0];
+        for (let m = ccb.bodyStart; m < ccb.bodyEnd; m++) {
+          if (!(isId(tk[m], cv) && isOp(tk[m+1], ".") && isId(tk[m+2], "option") && isOp(tk[m+3], "("))) continue;
+          const oa = parseArgs(tk, m + 3);
+          if (!oa) continue;
+          choices.push({ id: arg(oa,0), text: arg(oa,1), next: arg(oa,2) });
+          m = oa.end - 1;
+        }
+      }
+      s.nodes.push(mkNode(arg(a,0), arg(a,1), arg(a,2), portrait, choices, ""));
+    }
+  }
+  if (!s.start && s.nodes.length) s.start = s.nodes[0].id;
+  return s;
+}
+
+function parseKubeJS(src) {
+  const tk = tokenize(src);
+  const scripts = [], ranges = [];
+  for (let i = 0; i < tk.length; i++) {
+    if (!isId(tk[i], "SolarisRPG") || !isOp(tk[i+1], ".") || !isId(tk[i+2], "scripts")) continue;
+    if (!isOp(tk[i+3], "(")) continue;
+    const outer = parseArgs(tk, i + 3);
+    if (!outer || !outer.values.length) continue;
+    const cb = outer.values[0];
+    if (cb.kind !== "callback") continue;
+    for (let j = cb.bodyStart; j < cb.bodyEnd; j++) {
+      if (!(tk[j] && tk[j].t === "id" && isOp(tk[j+1], ".") && isId(tk[j+2], "create") && isOp(tk[j+3], "("))) continue;
+      const a = parseArgs(tk, j + 3);
+      if (!a || a.values.length < 2) continue;
+      const id = a.values[0].kind === "str" ? a.values[0].v : "";
+      const inner = a.values[1];
+      if (!id || !inner || inner.kind !== "callback") continue;
+      scripts.push(parseScriptBody(tk, inner, id));
+      j = a.end - 1;
+    }
+    ranges.push([tk[i].s, tk[outer.end - 1].e]);
+    i = outer.end - 1;
+  }
+  let leftover = src;
+  for (const [a, b] of ranges.slice().sort((x, y) => y[0] - x[0])) {
+    leftover = leftover.slice(0, a) + leftover.slice(b);
+  }
+  return { scripts, leftover: leftover.replace(/\n{3,}/g, "\n\n").trim() };
+}
+
+/* ================================================================ 文件对话框 */
+
+function download(name, data, mime) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime || "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+async function saveTextFile(suggestedName, text, description, ext) {
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName,
+        types: [{ description, accept: { "text/plain": [ext] } }] });
+      const w = await h.createWritable();
+      await w.write(text); await w.close();
+      toast("已保存到 " + h.name);
+      return true;
+    } catch (e) {
+      if (e.name === "AbortError") return false;
+      toast("保存失败：" + e.message); return false;
+    }
+  }
+  download(suggestedName, text);
+  toast("这个浏览器不支持选择保存位置，已改为下载");
+  return true;
+}
+
+async function pickDirectory() {
+  if (!window.showDirectoryPicker) return null;
+  try { return await window.showDirectoryPicker({ mode: "readwrite" }); }
+  catch (e) { if (e.name !== "AbortError") toast("选目录失败：" + e.message); return null; }
+}
+
+async function writeFileDeep(root, path, data) {
+  const parts = path.split("/");
+  let dir = root;
+  for (let i = 0; i < parts.length - 1; i++) dir = await dir.getDirectoryHandle(parts[i], { create: true });
+  const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+  const w = await fh.createWritable();
+  await w.write(data); await w.close();
+}
+
+let CRC_TABLE = null;
+function crc32(b) {
+  if (!CRC_TABLE) {
+    CRC_TABLE = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) { let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      CRC_TABLE[i] = c >>> 0; }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+const le = (n, l) => { const a = new Uint8Array(l);
+  for (let i = 0; i < l; i++) a[i] = (n >>> (8*i)) & 0xFF; return a; };
+
+function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  let off = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.path), crc = crc32(f.data), sz = f.data.length;
+    parts.push(le(0x04034b50,4), le(20,2), le(0x0800,2), le(0,2), le(0,2), le(0,2),
+      le(crc,4), le(sz,4), le(sz,4), le(nm.length,2), le(0,2), nm, f.data);
+    central.push(le(0x02014b50,4), le(20,2), le(20,2), le(0x0800,2), le(0,2), le(0,2), le(0,2),
+      le(crc,4), le(sz,4), le(sz,4), le(nm.length,2), le(0,2), le(0,2), le(0,2), le(0,2),
+      le(0,4), le(off,4), nm);
+    off += 30 + nm.length + sz;
+  }
+  const cs = central.reduce((a,b) => a + b.length, 0);
+  return new Blob([...parts, ...central,
+    le(0x06054b50,4), le(0,2), le(0,2), le(files.length,2), le(files.length,2), le(cs,4), le(off,4), le(0,2)],
+    { type: "application/zip" });
+}
+function dataUrlToBytes(d) {
+  const bin = atob(d.split(",")[1]);
+  const b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return b;
+}
+
+function writeJs() {
+  if (!validate()) { toast("还有错误要先修"); return; }
+  saveTextFile(state.fileName || "dialogue.js", buildJs(), "KubeJS 脚本", ".js");
+}
+async function exportDatapack() {
+  if (!validate()) { toast("还有错误要先修"); return; }
+  const files = state.scripts.map(s => ["data/" + state.namespace + "/solaris_rpg/" + s.id + ".json", buildDatapackJson(s)]);
+  const dir = await pickDirectory();
+  if (dir) {
+    try { for (const [p, t] of files) await writeFileDeep(dir, p, t);
+      toast("已写入 " + files.length + " 个剧本到 " + dir.name); }
+    catch (e) { toast("写入失败：" + e.message); }
+    return;
+  }
+  for (const [p, t] of files) download(p.split("/").pop(), t, "application/json;charset=utf-8");
+  toast("不支持选目录，已改为下载 " + files.length + " 个文件");
+}
+async function exportResourcePack() {
+  if (!state.portraits.length) { toast("还没上传立绘"); return; }
+  const files = [["pack.mcmeta", JSON.stringify({ pack: { pack_format: 15, description: state.fileName + " 的立绘" } }, null, 2)]];
+  for (const p of state.portraits) files.push(["assets/" + state.namespace + "/" + p.path.split(":")[1], dataUrlToBytes(p.dataUrl)]);
+  const dir = await pickDirectory();
+  if (dir) {
+    try { for (const [p, d] of files) await writeFileDeep(dir, p, d);
+      toast("资源包已写入 " + dir.name + "，放进 resourcepacks/ 即可"); }
+    catch (e) { toast("写入失败：" + e.message); }
+    return;
+  }
+  download(state.fileName.replace(/\.js$/, "") + "-portraits.zip",
+    zipStore(files.map(([p, d]) => ({ path: p, data: d instanceof Uint8Array ? d : new TextEncoder().encode(d) }))),
+    "application/zip");
+  toast("不支持选目录，已改为下载 zip");
+}
+
+/* ================================================================ 导入 */
+
+function loadParsed(scripts) {
+  state.scripts = scripts;
+  for (const s of scripts) {
+    s.view = { x: 60, y: 60, zoom: 1 };
+    layoutScript(s);
+  }
+  state.activeScript = scripts.length ? scripts[0].uid : null;
+  state.selected = null;
+}
+
+function importJs() {
+  $("jsInput").onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const { scripts, leftover } = parseKubeJS(String(r.result));
+        if (!scripts.length) { toast("没找到 SolarisRPG.scripts(...) 里的剧本"); e.target.value = ""; return; }
+        state.fileName = f.name; state.leftover = leftover;
+        loadParsed(scripts);
+        renderAll(); fitView();
+        toast("导入 " + scripts.length + " 个剧本" + (leftover.trim() ? "，非剧本代码会原样保留" : ""));
+      } catch (err) { toast("解析失败：" + err.message); }
+      e.target.value = "";
+    };
+    r.readAsText(f, "utf-8");
+  };
+  $("jsInput").click();
+}
+
+function applyProject(data) {
+  state.fileName = data.fileName || "dialogue.js";
+  state.namespace = data.namespace || "solaris_compat";
+  state.portraitDir = data.portraitDir || "textures/gui/portrait";
+  state.leftover = data.leftover || "";
+  state.portraits = data.portraits || [];
+  state.side = data.side !== false;
+  state.scripts = (data.scripts || []).map(s => ({
+    uid: nextUid(), id: s.id || "", start: s.start || "",
+    view: s.view || { x: 60, y: 60, zoom: 1 },
+    nodes: (s.nodes || []).map(n => Object.assign(
+      mkNode(n.id, n.speaker, n.text, n.portrait,
+        (n.choices || []).map(c => ({ id: c.id || "", text: c.text || "", next: c.next || "" })), n.next),
+      { x: typeof n.x === "number" ? n.x : 0, y: typeof n.y === "number" ? n.y : 0 })),
+  }));
+  // 没存过坐标的（比如从数据包导入）就自动排一下
+  for (const s of state.scripts) {
+    if (!s.nodes.some(n => n.x || n.y)) layoutScript(s);
+  }
+  state.activeScript = state.scripts.length ? state.scripts[0].uid : null;
+  state.selected = null;
+}
+
+function openProject() {
+  $("projInput").onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        if (data.nodes && !data.format) {
+          state.fileName = f.name.replace(/\.json$/, ".js");
+          state.leftover = ""; state.portraits = [];
+          const s = { uid: nextUid(), id: f.name.replace(/\.json$/, ""), start: data.start || "",
+            view: { x: 60, y: 60, zoom: 1 },
+            nodes: (data.nodes || []).map(n => mkNode(n.id, n.speaker, n.text, n.portrait,
+              (n.choices || []).map(c => ({ id: c.id || "", text: c.text || "", next: c.next || "" })), n.next)) };
+          layoutScript(s);
+          state.scripts = [s];
+          state.activeScript = s.uid; state.selected = null;
+          toast("已导入数据包剧本（立绘要重新上传）");
+        } else {
+          applyProject(data);
+          toast("项目已打开");
+        }
+        renderAll(); fitView();
+      } catch (err) { toast("打不开：" + err.message); }
+      e.target.value = "";
+    };
+    r.readAsText(f, "utf-8");
+  };
+  $("projInput").click();
+}
+function saveProject() {
+  saveTextFile(state.fileName.replace(/\.js$/, "") + ".sde.json", buildProject(), "对话编辑器项目", ".json");
+}
+
+/* ================================================================ 自动保存 */
+
+const LS_KEY = "solaris-dialogue-editor-v3";
+function snapshot(withImages) {
+  return JSON.stringify({
+    fileName: state.fileName, namespace: state.namespace, portraitDir: state.portraitDir,
+    leftover: state.leftover, side: state.side,
+    scripts: state.scripts.map(s => ({
+      id: s.id, start: s.start, view: s.view,
+      nodes: s.nodes.map(n => ({ id: n.id, speaker: n.speaker, text: n.text, portrait: n.portrait,
+        choices: n.choices, next: n.next, x: n.x, y: n.y })),
+    })),
+    portraits: withImages ? state.portraits
+                         : state.portraits.map(p => ({ name: p.name, path: p.path, dataUrl: "", w: p.w, h: p.h })),
+  });
+}
+function autosave() {
+  try { localStorage.setItem(LS_KEY, snapshot(true)); }
+  catch (e) {
+    try { localStorage.setItem(LS_KEY, snapshot(false)); } catch (e2) { /* 放弃 */ }
+  }
+}
+
+/* ================================================================ 总渲染 */
+
+function renderTabs() {
+  const box = $("tabs");
+  box.innerHTML = "";
+  for (const s of state.scripts) {
+    const t = document.createElement("div");
+    t.className = "tab" + (s.uid === state.activeScript ? " on" : "");
+    const nm = document.createElement("span");
+    nm.textContent = s.id;
+    t.appendChild(nm);
+    const x = document.createElement("span");
+    x.className = "x"; x.textContent = "✕";
+    x.onclick = e => { e.stopPropagation(); deleteScript(s.uid); };
+    t.appendChild(x);
+    t.onclick = () => { state.activeScript = s.uid; state.selected = null; renderAll(); };
+    box.appendChild(t);
+  }
+}
+
+function renderAll() {
+  $("fileName").value = state.fileName;
+  $("namespace").value = state.namespace;
+  $("portraitDir").value = state.portraitDir;
+  $("side").classList.toggle("hide", !state.side);
+  renderTabs();
+  renderCanvas();
+  renderPreview();
+  renderPortraits();
+  validate();
+  autosave();
+}
+
+/* ================================================================ 启动 */
+
+$("fileName").oninput = e => { state.fileName = e.target.value.trim(); autosave(); };
+$("namespace").oninput = e => {
+  state.namespace = e.target.value.trim();
+  state.portraits.forEach(p => p.path = portraitPathFor(p.name));
+  renderAll();
+};
+$("portraitDir").oninput = e => {
+  state.portraitDir = e.target.value.trim();
+  state.portraits.forEach(p => p.path = portraitPathFor(p.name));
+  renderAll();
+};
+$("drop").onclick = () => $("fileInput").click();
+$("fileInput").onchange = e => { handleFiles(e.target.files); e.target.value = ""; };
+$("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", e => {
+  e.preventDefault(); $("drop").classList.remove("over"); handleFiles(e.dataTransfer.files);
+});
+window.addEventListener("resize", renderPreview);
+
+bindCanvas();
+
+(function boot() {
+  let restored = false;
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.scripts && d.scripts.length) { applyProject(d); restored = true; }
+    }
+  } catch (e) { /* 用示例 */ }
+
+  if (!restored) {
+    const s = { uid: nextUid(), id: "my_script", start: "start", view: { x: 40, y: 40, zoom: 1 }, nodes: [
+      mkNode("start", "", "你推开酒馆的门，木地板在脚下吱呀作响。", PORTRAIT_KEEP, [], "greet"),
+      mkNode("greet", "奥利维亚", "哟，稀客。这么晚了还来我这儿——是有事，还是单纯想喝酒？", PORTRAIT_KEEP, [], "branch"),
+      mkNode("branch", "奥利维亚", "……说吧，我听着。", PORTRAIT_KEEP, [
+        { id: "ask", text: "我想打听点事。", next: "answer_ask" },
+        { id: "drink", text: "先来一杯吧。", next: "answer_drink" },
+      ], ""),
+      mkNode("answer_ask", "奥利维亚", "打听消息可不便宜。不过看在你大半夜跑一趟的份上，这次算你免费。", PORTRAIT_KEEP, [], "end"),
+      mkNode("answer_drink", "奥利维亚", "爽快，我就喜欢你这种人。给你倒满，别客气。", PORTRAIT_KEEP, [], "end"),
+      mkNode("end", "", "她把杯子推回吧台，转身去招呼别的客人。", PORTRAIT_HIDE, [], ""),
+    ] };
+    layoutScript(s);
+    state.scripts = [s];
+    state.activeScript = s.uid;
+    state.selected = s.nodes[0].uid;
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
