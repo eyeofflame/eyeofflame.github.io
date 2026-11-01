@@ -9,6 +9,6 @@ draft: false
 lang: ''
 ---
 
-本地初始化：```pnpm install```
-本地调试：```pnpm dev```
+本地初始化：```pnpm install```  
+本地调试：```pnpm dev```    
 使用```pnpm new-post "name"```以创建新文章
