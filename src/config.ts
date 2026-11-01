@@ -8,7 +8,7 @@ import type {
 import { LinkPreset } from "./types/config";
 
 export const siteConfig: SiteConfig = {
-	title: "Eyeofflame643",
+	title: "墨尘",
 	subtitle: "记录折腾与生活",
 	lang: "zh_CN", // 语言代码，例如 'en', 'zh_CN', 'ja' 等；决定界面文字语言
 	themeColor: {
@@ -46,7 +46,7 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.About,
 		{
 			name: "GitHub",
-			url: "https://github.com/Eyeofflame643", // 内部链接不要带 base 路径，会自动拼接
+			url: "https://github.com/eyeofflame", // 内部链接不要带 base 路径，会自动拼接
 			external: true, // 显示外链图标，并在新标签页打开
 		},
 	],
@@ -55,7 +55,7 @@ export const navBarConfig: NavBarConfig = {
 export const profileConfig: ProfileConfig = {
 	avatar: "assets/images/demo-avatar.png", // 相对 /src 的路径；以 / 开头则相对 /public
 	name: "Eyeofflame643",
-	bio: "在折腾中慢慢变强。",
+	bio: "依旧",
 	links: [
 		{
 			name: "GitHub",
