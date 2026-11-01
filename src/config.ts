@@ -61,7 +61,7 @@ export const profileConfig: ProfileConfig = {
 			name: "GitHub",
 			icon: "fa6-brands:github", // 图标代码可在 https://icones.js.org/ 查询
 			// 如果用的图标集没装，需要先 `pnpm add @iconify-json/<icon-set-name>`
-			url: "https://github.com/Eyeofflame643",
+			url: "https://github.com/eyeofflame",
 		},
 	],
 };
