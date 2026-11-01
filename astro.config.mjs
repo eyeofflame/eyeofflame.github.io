@@ -29,7 +29,7 @@ export default defineConfig({
 	// 部署地址：仓库名为 <用户名>.github.io 时用 "https://<用户名>.github.io/" + base "/"
 	// 如果仓库名是 blog 之类的普通名字，则 site 仍是 "https://<用户名>.github.io"，
 	// base 要改成 "/blog/"（否则 CSS/JS 全部 404）
-	site: "https://Eyeofflame643.github.io/",
+	site: "https://eyeofflame643.github.io/",
 	base: "/",
 	trailingSlash: "always",
 	integrations: [
