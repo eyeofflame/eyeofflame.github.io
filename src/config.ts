@@ -53,7 +53,7 @@ export const navBarConfig: NavBarConfig = {
 };
 
 export const profileConfig: ProfileConfig = {
-	avatar: "https://avatars.githubusercontent.com/u/138283224?v=4&size=64", // 相对 /src 的路径；以 / 开头则相对 /public
+	avatar: "https://avatars.githubusercontent.com/u/138283224?v=4&size=512", // 相对 /src 的路径；以 / 开头则相对 /public
 	name: "Eyeofflame643",
 	bio: "依旧",
 	links: [
