@@ -12,12 +12,12 @@ lang: 'cn'
 # 使用WeChatAgent将DSH接入微信
 本文具有一定时效性，会过期
 ## 前置要求：  
-- dsh(桌面版与npm版均可，版本必要要求 < 0.2.2 )
+- dsh(桌面版与npm版均可，npm版需要安装pnpm )
 - 科学上网（建议）
 - 一个微信小号
 - 一双nb的手和一个干净的windows10/11系统    
 
-在GitHub上搜索WeChatAgent，在Release页面下载最新版（0.4.2）     
+在GitHub上搜索WeChatAgent，在Release页面下载最新版     
 找不到可以点击该链接<https://github.com/sourcepro5/WeChatAgent>     
 
 # 初始配置

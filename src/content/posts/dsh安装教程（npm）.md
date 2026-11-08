@@ -24,7 +24,8 @@ choco install nodejs --version="26.13.0"
 # 安装
 先```npm -v```查看npm版本   
 对于npm版本≤11的，可直接运行```npm i -g @deepseek-ai/dsh@latest```下载并安装    
-而npm版本≥12的，则需先运行```npm config set dangerously-allow-all-scripts true```再运行上面的下载命令
+而npm版本≥12的，则需先运行```npm config set dangerously-allow-all-scripts true```再运行上面的下载命令   
+安装完后再运行```npm i -g pnpm```以使dsh支持插件安装
 
 # 运行
 安装完后运行```dsh web```,成功后会自动打开浏览器    
